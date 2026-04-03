@@ -1,0 +1,150 @@
+name: ☁️🚀 Mobile Tests - AWS Device Farm
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+  workflow_dispatch:
+    inputs:
+      platform:
+        description: Platform to run in AWS Device Farm
+        required: true
+        default: android
+        type: choice
+        options:
+          - android
+          - ios
+
+permissions:
+  contents: write
+
+env:
+  JAVA_VERSION: '17'
+  AWS_REGION: 'us-east-1'
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+
+jobs:
+  # ============================================================
+  # Sanity tests: corren en ubuntu en push/PR, sin dispositivo
+  # ============================================================
+  sanity-tests:
+    name: Sanity Tests (framework health)
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    # Corre siempre: push, PR y workflow_dispatch
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Java ${{ env.JAVA_VERSION }}
+        uses: actions/setup-java@v4
+        with:
+          java-version: ${{ env.JAVA_VERSION }}
+          distribution: temurin
+          cache: gradle
+
+      - name: Run Sanity Tests (no device required)
+        run: |
+          # Modularización para facilitar futuras migraciones
+          run_gradle_sanity() {
+            ./gradlew test -Drun.mobile.tests=false --info
+          }
+          mkdir -p build/ci-logs
+          run_gradle_sanity 2>&1 | tee build/ci-logs/sanity-gradle.log
+
+      - name: Upload Sanity Test Results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: sanity-test-results-aws
+          path: |
+            build/allure-results/
+            build/cucumber-reports/
+            build/surefire-reports/
+            build/ci-logs/sanity-gradle.log
+          retention-days: 14
+
+  # ============================================================
+  # Mobile tests: solo corren con dispatch manual en AWS
+  # ============================================================
+  mobile-tests-aws-device-farm:
+    name: Mobile Tests - aws-device-farm-${{ github.event.inputs.platform }}
+    needs: [ sanity-tests ]
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    if: github.event_name == 'workflow_dispatch' && needs['sanity-tests'].result == 'success'
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Java ${{ env.JAVA_VERSION }}
+        uses: actions/setup-java@v4
+        with:
+          java-version: ${{ env.JAVA_VERSION }}
+          distribution: temurin
+          cache: gradle
+
+      - name: Configure AWS Credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Verify AWS identity
+        shell: bash
+        run: aws sts get-caller-identity
+
+      - name: Run Mobile Tests - AWS Device Farm
+        shell: bash
+        env:
+          TEST_PLATFORM: ${{ github.event.inputs.platform }}
+        run: |
+          # Modularización para facilitar futuras migraciones
+          run_gradle_aws_device_farm() {
+            ./gradlew test -Drun.mobile.tests=true -Denv=aws-device-farm -Dplatform=${TEST_PLATFORM} --info
+          }
+          mkdir -p build/ci-logs
+          run_gradle_aws_device_farm 2>&1 | tee build/ci-logs/aws-device-farm-gradle.log
+
+      - name: Upload AWS Test Results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: mobile-test-results-aws-device-farm-${{ github.event.inputs.platform }}
+          path: |
+            build/allure-results/
+            build/cucumber-reports/
+            build/surefire-reports/
+            build/ci-logs/aws-device-farm-gradle.log
+          retention-days: 30
+
+      - name: 📊 Job Summary - AWS Device Farm Console
+        if: always()
+        shell: bash
+        run: |
+          {
+            echo "## 📊 Mobile Test Report - AWS Device Farm"
+            echo ""
+            echo "| Detail | Value |"
+            echo "|--------|-------|"
+            echo "| 🏃 Run | #${{ github.run_number }} |"
+            echo "| 📅 Date | $(date '+%Y-%m-%d %H:%M UTC') |"
+            echo "| 📱 Platform | ${{ github.event.inputs.platform }} |"
+            echo "| 👤 Triggered by | ${{ github.actor }} |"
+            echo "| ☁️ Region | $AWS_REGION |"
+            echo ""
+            echo "### 🌐 Ver reporte oficial"
+            echo ""
+            echo "Los resultados completos (videos, logs, screenshots por dispositivo) están disponibles en la consola oficial de AWS:"
+            echo ""
+            echo "👉 **[AWS Device Farm Console](https://console.aws.amazon.com/devicefarm/home)**"
+            echo ""
+            echo "> Navega a tu proyecto → Test runs → selecciona esta ejecución para ver videos y logs por dispositivo."
+            echo ""
+            echo "### 📁 Artifact de respaldo"
+            echo "- 📦 **mobile-test-results-aws-device-farm-${{ github.event.inputs.platform }}**: allure-results, cucumber y surefire (descargable desde Artifacts de esta ejecución)"
+          } >> "$GITHUB_STEP_SUMMARY"

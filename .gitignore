@@ -1,21 +1,72 @@
+# Salidas de compilación y artefactos temporales
 .gradle
 **/build/
 !**/src/**/build/
+build/
+target/
+out/
+app/build/
+app/target/
 
-# Ignore Gradle GUI config
+# Resultados de pruebas y reportes
+allure-results/
+allure-report/
+cucumber-reports/
+surefire-reports/
+generated-test-sources/
+site/
+test-classes/
+videos/
+screenshots/
+
+# Archivos y carpetas de IDEs
+.idea/
+.vscode/
+.settings/
+*.iml
+*.ipr
+*.iws
+.classpath
+.project
+
+# Archivos de configuración y caché de Gradle
 gradle-app.setting
-
-# Avoid ignoring Gradle wrapper jar file (.jar files are usually ignored)
-!gradle-wrapper.jar
-
-# Avoid ignore Gradle wrappper properties
-!gradle-wrapper.properties
-
-# Cache of project
 .gradletasknamecache
 
-# Eclipse Gradle plugin generated files
-# Eclipse Core
-.project
-# JDT-specific (Eclipse Java Development Tools)
-.classpath
+# Evitar ignorar el wrapper de Gradle
+!gradle-wrapper.jar
+!gradle-wrapper.properties
+
+# Archivos temporales y de sistema
+*.log
+*.tmp
+*.bak
+*.swp
+*.swo
+*.DS_Store
+Thumbs.db
+
+# Otros archivos generados
+*.lock
+
+# Node/npm (por si hay scripts JS)
+node_modules/
+
+# Python (por si hay scripts auxiliares)
+__pycache__/
+*.pyc
+
+# MacOS
+.DS_Store
+
+# Windows
+Thumbs.db
+
+# Linux
+*~
+
+# Cache de herramientas
+.cache/
+
+# Otros
+*.orig

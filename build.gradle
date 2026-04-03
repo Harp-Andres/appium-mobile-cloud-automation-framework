@@ -1,0 +1,100 @@
+plugins {
+    id 'java'
+    id 'application'
+    id 'idea'
+}
+
+group = 'com.automatizacion.moderna'
+version = '1.0.0-SNAPSHOT'
+
+java {
+    sourceCompatibility = JavaVersion.VERSION_17
+    targetCompatibility = JavaVersion.VERSION_17
+}
+
+ext {
+    appiumJavaClientVersion = '9.2.3'
+    seleniumVersion = '4.22.0'
+    cucumberVersion = '7.20.1'
+    junitJupiterVersion = '5.11.4'
+    junitPlatformVersion = '1.11.4'
+    allureVersion = '2.29.1'
+    assertjVersion = '3.27.3'
+}
+
+repositories {
+    mavenCentral()
+}
+
+dependencies {
+    // Appium
+    implementation "io.appium:java-client:${appiumJavaClientVersion}"
+
+    // Selenium BOM para gestión de versiones
+    testImplementation platform("org.seleniumhq.selenium:selenium-bom:${seleniumVersion}")
+    testImplementation "org.seleniumhq.selenium:selenium-java"
+
+    // Cucumber
+    testImplementation "io.cucumber:cucumber-java:${cucumberVersion}"
+    testImplementation "io.cucumber:cucumber-junit-platform-engine:${cucumberVersion}"
+    testImplementation "io.cucumber:cucumber-html:0.2.7"
+
+    // JUnit
+    testImplementation "org.junit.jupiter:junit-jupiter:${junitJupiterVersion}"
+    testImplementation "org.junit.platform:junit-platform-suite:${junitPlatformVersion}"
+
+    // AssertJ
+    testImplementation "org.assertj:assertj-core:${assertjVersion}"
+
+    // Allure
+    testImplementation "io.qameta.allure:allure-cucumber7-jvm:${allureVersion}"
+    testImplementation "io.qameta.allure:allure-attachments:${allureVersion}"
+}
+
+test {
+    useJUnitPlatform()
+    testLogging {
+        events "passed", "skipped", "failed"
+    }
+
+    def selectedEnv = (System.getProperty("ENV") ?: System.getenv("ENV") ?: "").trim()
+
+    if (!selectedEnv) {
+        throw new RuntimeException("Debe definir ENV para ejecutar las pruebas. Ejemplo local: .\\gradlew.bat test -DENV=local")
+    }
+
+    systemProperty "ENV", selectedEnv
+    // La suite Cucumber se ejecuta en el task test; unitarias van en unitTest.
+    exclude '**/tests/unit/**'
+
+    doFirst {
+        println "[INFO] Entorno activo para tests: ${selectedEnv}"
+    }
+}
+
+tasks.register('unitTest', Test) {
+    description = 'Ejecuta pruebas unitarias puras del paquete tests.unit antes de Cucumber.'
+    group = 'verification'
+    useJUnitPlatform()
+    testClassesDirs = sourceSets.test.output.classesDirs
+    classpath = sourceSets.test.runtimeClasspath
+    filter {
+        includeTestsMatching 'com.automatizacion.moderna.tests.unit.*'
+    }
+
+    testLogging {
+        events "passed", "skipped", "failed"
+    }
+
+    def selectedEnv = (System.getProperty("ENV") ?: System.getenv("ENV") ?: "").trim()
+    if (selectedEnv) {
+        systemProperty "ENV", selectedEnv
+    }
+
+    doFirst {
+        println "[INFO] Entorno activo para unitTest: ${selectedEnv ?: 'no-definido'}"
+    }
+}
+
+test.dependsOn(tasks.named('unitTest'))
+

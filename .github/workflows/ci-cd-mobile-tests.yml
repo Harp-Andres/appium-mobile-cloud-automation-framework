@@ -1,0 +1,524 @@
+name: 🖥️🤖 Mobile Tests - Self Hosted
+
+on:
+  push:
+    branches:
+      - '**'
+  pull_request:
+    branches: [ main ]
+  workflow_dispatch:
+    inputs:
+      project_id:
+        description: "Opcional: identificador del proyecto en reportes (si se omite, usa automaticamente el nombre del repositorio)"
+        required: false
+        default: ""
+
+permissions:
+  contents: write
+  pages: write
+  id-token: write
+
+env:
+  JAVA_VERSION: '17'
+  MAVEN_VERSION: '3.9'
+  APPIUM_SERVER_URL: 'http://127.0.0.1:4723'
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+
+jobs:
+  # ============================================================
+  # Sanity tests: corren siempre primero (push/PR y manual)
+  # ============================================================
+  sanity-tests:
+    name: Sanity Tests (framework health)
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    # Corre siempre: push, PR y workflow_dispatch
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Java ${{ env.JAVA_VERSION }}
+        uses: actions/setup-java@v4
+        with:
+          java-version: ${{ env.JAVA_VERSION }}
+          distribution: temurin
+          cache: gradle
+
+      # --- MIGRADO A GRADLE ---
+      - name: 🧪 Run Sanity Tests - Unit Tests + Cucumber Health (sin dispositivo)
+        run: |
+          # Función para ejecutar tests con Gradle y loguear salida
+          run_gradle_test() {
+            ./gradlew test --info -Drun.mobile.tests=false
+          }
+          mkdir -p build/ci-logs
+          run_gradle_test 2>&1 | tee build/ci-logs/sanity-gradle.log
+
+      - name: Upload Sanity Test Results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: sanity-test-results
+          path: |
+            build/allure-results/
+            build/reports/tests/
+            build/ci-logs/
+          retention-days: 14
+
+  # ============================================================
+  # Mobile tests: solo manual y solo si sanity fue exitoso
+  # ============================================================
+  mobile-tests-local-android:
+    name: Mobile Tests - local-android
+    needs: [ sanity-tests ]
+    runs-on: [self-hosted, android, appium, windows]
+    timeout-minutes: 120
+    # Solo corre cuando se dispara manualmente
+    if: github.event_name == 'workflow_dispatch' && needs['sanity-tests'].result == 'success'
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Java ${{ env.JAVA_VERSION }}
+        uses: actions/setup-java@v4
+        with:
+          java-version: ${{ env.JAVA_VERSION }}
+          distribution: 'temurin'
+          cache: gradle
+
+      # --- ELIMINADO SETUP DE MAVEN ---
+      # --- ELIMINADO SETUP DE JAVA 17 MANUAL (ya lo hace setup-java) ---
+
+      - name: Verify ADB and Appium Server
+        shell: cmd
+        run: |
+          echo Checking ADB and Appium Server...
+          setlocal enabledelayedexpansion
+          set "ADB_BIN="
+          REM Buscar en ANDROID_HOME
+          if defined ANDROID_HOME (
+            if exist "!ANDROID_HOME!\platform-tools\adb.exe" (
+              set "ADB_BIN=!ANDROID_HOME!\platform-tools\adb.exe"
+              goto found_adb
+            )
+          )
+          REM Buscar en PATH
+          for %%X in (adb.exe) do set "ADB_BIN=%%~$PATH:X"
+          if defined ADB_BIN goto found_adb
+          REM Buscar en ubicaciones comunes
+          if exist "%USERPROFILE%\AppData\Local\Android\Sdk\platform-tools\adb.exe" (
+            set "ADB_BIN=%USERPROFILE%\AppData\Local\Android\Sdk\platform-tools\adb.exe"
+            goto found_adb
+          )
+          if exist "C:\Android\sdk\platform-tools\adb.exe" (
+            set "ADB_BIN=C:\Android\sdk\platform-tools\adb.exe"
+            goto found_adb
+          )
+          REM No encontrado
+          echo ERROR: ADB not found in:
+          echo   - ANDROID_HOME: !ANDROID_HOME!
+          echo   - PATH
+          echo   - %USERPROFILE%\AppData\Local\Android\Sdk\platform-tools\adb.exe
+          echo   - C:\Android\sdk\platform-tools\adb.exe
+          exit /b 1
+          :found_adb
+          echo ADB found: !ADB_BIN!
+          "!ADB_BIN!" start-server
+          "!ADB_BIN!" devices
+          echo Checking Appium server at %APPIUM_SERVER_URL%...
+          curl.exe -s %APPIUM_SERVER_URL%/status
+          if errorlevel 1 (
+            echo ERROR: Appium server not reachable at %APPIUM_SERVER_URL%
+            exit /b 1
+          )
+          echo Appium server is running
+
+      - name: CI Context Snapshot
+        if: always()
+        shell: cmd
+        run: |
+          mkdir build\ci-logs 2>nul
+          echo RUN_ID=${{ github.run_id }} > build\ci-logs\context.txt
+          echo RUNNER_OS=%RUNNER_OS% >> build\ci-logs\context.txt
+          echo RUNNER_NAME=%RUNNER_NAME% >> build\ci-logs\context.txt
+          java -version >> build\ci-logs\context.txt 2>&1
+          adb devices >> build\ci-logs\context.txt 2>&1
+          curl.exe -s %APPIUM_SERVER_URL%/status > build\ci-logs\appium-status.json 2>&1
+
+      # --- MIGRADO A GRADLE ---
+      - name: Run Mobile Tests - local
+        shell: cmd
+        env:
+          ALLURE_ENV_PATH: src/test/resources/config/local.properties
+        run: |
+          mkdir build\ci-logs 2>nul
+          call gradlew.bat test -Drun.mobile.tests=true -Denv=local -Devidence.video.enabled=true -Dallure.environment=%ALLURE_ENV_PATH% --info > build\ci-logs\mobile-gradle.log 2>&1
+          if errorlevel 1 (
+            echo ===== LAST 200 LINES OF GRADLE LOG =====
+            powershell -NoProfile -Command "Get-Content 'build/ci-logs/mobile-gradle.log' -Tail 200"
+            exit /b 1
+          )
+
+      - name: Upload Mobile Test Results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: mobile-test-results-local-android
+          if-no-files-found: warn
+          path: |
+            build/allure-results/
+            build/reports/tests/
+            build/ci-logs/
+            build/screenshots/
+            build/videos/
+          retention-days: 30
+
+  # ============================================================
+  # Publish Allure Report as GitHub Actions Job Summary
+  # ============================================================
+  publish-report:
+    name: 📊 Generate & Publish Test Report
+    needs: [ mobile-tests-local-android ]
+    runs-on: ubuntu-latest
+    if: always() && github.event_name == 'workflow_dispatch' && needs['mobile-tests-local-android'].result != 'skipped'
+    permissions:
+      contents: read
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Download Mobile Test Results
+        uses: actions/download-artifact@v4
+        with:
+          name: mobile-test-results-local-android
+          path: downloaded-results
+
+      - name: Install Allure CLI
+        continue-on-error: true
+        run: |
+          if wget -qO allure.tgz https://github.com/allure-framework/allure2/releases/download/2.29.0/allure-2.29.0.tgz \
+             && tar -xzf allure.tgz \
+             && sudo mv allure-2.29.0 /opt/allure \
+             && sudo ln -sf /opt/allure/bin/allure /usr/local/bin/allure; then
+            echo "ALLURE_CLI_READY=true" >> $GITHUB_ENV
+            allure --version || true
+          else
+            echo "ALLURE_CLI_READY=false" >> $GITHUB_ENV
+            echo "::warning::No se pudo instalar Allure CLI. Se continuará sin romper el workflow."
+          fi
+
+      - name: Generate Allure HTML Report
+        continue-on-error: true
+        run: |
+          RESULTS_DIR="downloaded-results/allure-results"
+          if [ "${ALLURE_CLI_READY:-false}" != "true" ]; then
+            echo "ALLURE_GENERATED=false" >> $GITHUB_ENV
+            echo "ALLURE_SKIP_REASON=No se pudo instalar Allure CLI en esta ejecución." >> $GITHUB_ENV
+            echo "::warning::No se generó Allure HTML porque Allure CLI no está disponible."
+            exit 0
+          fi
+
+          if [ -d "$RESULTS_DIR" ] && allure generate "$RESULTS_DIR" --clean -o allure-report; then
+            echo "ALLURE_GENERATED=true" >> $GITHUB_ENV
+            echo "ALLURE_SKIP_REASON=" >> $GITHUB_ENV
+            echo "✅ Allure report generated"
+          else
+            echo "ALLURE_GENERATED=false" >> $GITHUB_ENV
+            echo "ALLURE_SKIP_REASON=No existe allure-results o fallo la generación de HTML." >> $GITHUB_ENV
+            echo "::warning::No se pudo generar Allure HTML. Revisa artifact/raw results."
+            ls -la downloaded-results/ || true
+          fi
+
+      - name: Upload Full Allure HTML Report as Artifact
+        if: env.ALLURE_GENERATED == 'true'
+        continue-on-error: true
+        uses: actions/upload-artifact@v4
+        with:
+          name: allure-html-report-run-${{ github.run_number }}
+          path: allure-report/
+          retention-days: 30
+
+      - name: Publish Allure Report to public reports repo
+        if: env.ALLURE_GENERATED == 'true'
+        env:
+          REPORTS_REPO_PAT: ${{ secrets.REPORTS_REPO_PAT }}
+          REPORTS_REPO: Harp-Andres/automation-test-reports-hub
+        run: |
+          set -e
+
+          if [ -z "${REPORTS_REPO_PAT:-}" ]; then
+            echo "REPORTS_PUBLISHED=false" >> "$GITHUB_ENV"
+            echo "REPORTS_SKIP_REASON=Falta el secret REPORTS_REPO_PAT en este repositorio." >> "$GITHUB_ENV"
+            echo "::warning::No se publicó online: falta REPORTS_REPO_PAT."
+            exit 0
+          fi
+
+          PROJECT_INPUT="${{ github.event.inputs.project_id }}"
+          REPO_NAME="${GITHUB_REPOSITORY#*/}"
+          if [ -z "$PROJECT_INPUT" ]; then
+            PROJECT_INPUT="$REPO_NAME"
+          fi
+          PROJECT_ID="$(printf '%s' "$PROJECT_INPUT" | tr '[:upper:]' '[:lower:]' | sed -E 's/[^a-z0-9._-]+/-/g; s/^-+//; s/-+$//')"
+          if [ -z "$PROJECT_ID" ]; then
+            PROJECT_ID="$REPO_NAME"
+          fi
+
+          RUN_DIR="$PROJECT_ID/runs/${{ github.run_number }}"
+          LATEST_DIR="$PROJECT_ID/latest"
+
+          echo "REPORT_PROJECT_ID=$PROJECT_ID" >> "$GITHUB_ENV"
+          echo "PUBLIC_REPORT_URL=https://harp-andres.github.io/automation-test-reports-hub/$LATEST_DIR/" >> "$GITHUB_ENV"
+          echo "PUBLIC_REPORT_RUN_URL=https://harp-andres.github.io/automation-test-reports-hub/$RUN_DIR/" >> "$GITHUB_ENV"
+
+          AUTH_URL="https://x-access-token:${REPORTS_REPO_PAT}@github.com/${REPORTS_REPO}.git"
+
+          mkdir -p reports-repo
+          cd reports-repo
+          git init
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git remote add origin "$AUTH_URL"
+
+          if git ls-remote --exit-code --heads origin gh-pages >/dev/null 2>&1; then
+            git fetch origin gh-pages
+            git checkout -B gh-pages origin/gh-pages
+          else
+            git checkout --orphan gh-pages
+          fi
+
+          mkdir -p "$RUN_DIR" "$LATEST_DIR"
+          rm -rf "${RUN_DIR:?}"/* "${LATEST_DIR:?}"/*
+          cp -R ../allure-report/. "$RUN_DIR/"
+          cp -R ../allure-report/. "$LATEST_DIR/"
+
+          # Escribir metadata
+          printf 'source_repo=%s\nrun_id=%s\nrun_number=%s\npublished_at_utc=%s\n' \
+            "${GITHUB_REPOSITORY}" "${GITHUB_RUN_ID}" "${GITHUB_RUN_NUMBER}" \
+            "$(date -u +%Y-%m-%dT%H:%M:%SZ)" > "$RUN_DIR/_meta.txt"
+          cp "$RUN_DIR/_meta.txt" "$LATEST_DIR/_meta.txt"
+
+          # Generar index.html raiz con links a todos los proyectos publicados
+          PUBLISHED_AT="$(date -u '+%Y-%m-%d %H:%M UTC')"
+          {
+            echo '<!DOCTYPE html>'
+            echo '<html lang="es">'
+            echo '<head>'
+            echo '  <meta charset="UTF-8">'
+            echo '  <meta name="viewport" content="width=device-width, initial-scale=1.0">'
+            echo '  <title>QA Test Reports Hub</title>'
+            echo '  <style>'
+            echo '    * { margin: 0; padding: 0; box-sizing: border-box; }'
+            echo '    html { scroll-behavior: smooth; }'
+            echo '    body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "Helvetica Neue", sans-serif; background: linear-gradient(135deg, #0d1117 0%, #161b22 100%); color: #c9d1d9; min-height: 100vh; padding: 40px 20px; }'
+            echo '    .container { max-width: 1000px; margin: 0 auto; }'
+            echo '    header { text-align: center; margin-bottom: 50px; animation: fadeIn 0.6s ease-in; }'
+            echo '    h1 { font-size: 3em; background: linear-gradient(135deg, #58a6ff, #79c0ff); -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text; margin-bottom: 10px; font-weight: 700; letter-spacing: -1px; }'
+            echo '    .subtitle { color: #8b949e; font-size: 1.1em; margin-bottom: 5px; }'
+            echo '    .status-badge { display: inline-block; background: #238636; color: white; padding: 5px 12px; border-radius: 20px; font-size: 0.85em; font-weight: 600; margin-top: 15px; }'
+            echo '    .projects-grid { display: grid; gap: 24px; }'
+            echo '    .project { background: linear-gradient(135deg, rgba(22, 27, 34, 0.8), rgba(33, 38, 45, 0.8)); border: 1px solid rgba(88, 166, 255, 0.2); border-radius: 12px; padding: 28px; transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1); backdrop-filter: blur(10px); }'
+            echo '    .project:hover { border-color: rgba(88, 166, 255, 0.6); box-shadow: 0 8px 32px rgba(88, 166, 255, 0.1); transform: translateY(-4px); }'
+            echo '    .project-header { display: flex; align-items: center; gap: 12px; margin-bottom: 16px; }'
+            echo '    .project-icon { font-size: 1.8em; }'
+            echo '    .project h2 { color: #58a6ff; font-size: 1.4em; font-weight: 600; margin: 0; }'
+            echo '    .project-meta { display: flex; flex-direction: column; gap: 8px; margin: 16px 0; }'
+            echo '    .meta-item { display: flex; align-items: center; gap: 8px; color: #8b949e; font-size: 0.95em; }'
+            echo '    .meta-item code { background: rgba(88, 166, 255, 0.1); color: #79c0ff; padding: 2px 6px; border-radius: 4px; font-family: "Courier New", monospace; font-size: 0.9em; }'
+            echo '    .meta-item strong { color: #c9d1d9; }'
+            echo '    .btn { display: inline-block; padding: 10px 20px; border-radius: 8px; text-decoration: none; font-size: 0.95em; font-weight: 600; transition: all 0.2s; border: none; cursor: pointer; }'
+            echo '    .btn-primary { background: linear-gradient(135deg, #238636, #2ea043); color: #fff; box-shadow: 0 4px 12px rgba(35, 134, 54, 0.3); }'
+            echo '    .btn-primary:hover { transform: translateY(-2px); box-shadow: 0 6px 20px rgba(35, 134, 54, 0.4); }'
+            echo '    .btn-secondary { background: rgba(33, 38, 45, 0.8); color: #c9d1d9; border: 1px solid #30363d; }'
+            echo '    .btn-secondary:hover { background: rgba(48, 54, 61, 0.8); border-color: #58a6ff; color: #58a6ff; }'
+            echo '    .btn-group { display: flex; gap: 12px; margin-top: 16px; flex-wrap: wrap; }'
+            echo '    .runs-history { margin-top: 16px; }'
+            echo '    .runs-history summary { cursor: pointer; color: #58a6ff; font-size: 0.95em; font-weight: 600; user-select: none; padding: 8px 0; display: flex; align-items: center; gap: 6px; transition: color 0.2s; }'
+            echo '    .runs-history summary:hover { color: #79c0ff; }'
+            echo '    .runs-history summary::marker { color: #58a6ff; }'
+            echo '    .runs-list { list-style: none; padding: 12px 0 0 0; margin: 0; display: flex; flex-wrap: wrap; gap: 8px; }'
+            echo '    .runs-list li a { display: inline-block; padding: 6px 12px; background: linear-gradient(135deg, rgba(88, 166, 255, 0.1), rgba(121, 192, 255, 0.05)); border: 1px solid rgba(88, 166, 255, 0.3); border-radius: 6px; color: #79c0ff; text-decoration: none; font-size: 0.9em; font-weight: 500; transition: all 0.2s; }'
+            echo '    .runs-list li a:hover { background: rgba(88, 166, 255, 0.2); border-color: rgba(88, 166, 255, 0.6); box-shadow: 0 4px 12px rgba(88, 166, 255, 0.15); }'
+            echo '    footer { margin-top: 60px; padding-top: 30px; border-top: 1px solid #30363d; text-align: center; color: #484f58; font-size: 0.9em; }'
+            echo '    @keyframes fadeIn { from { opacity: 0; transform: translateY(20px); } to { opacity: 1; transform: translateY(0); } }'
+            echo '    .project { animation: fadeIn 0.6s ease-in forwards; }'
+            echo '    .project:nth-child(1) { animation-delay: 0.1s; }'
+            echo '    .project:nth-child(2) { animation-delay: 0.2s; }'
+            echo '    .project:nth-child(3) { animation-delay: 0.3s; }'
+            echo '  </style>'
+            echo '</head>'
+            echo '<body>'
+            echo '  <div class="container">'
+            echo '    <header>'
+            echo '      <h1>🧪 QA Test Reports Hub</h1>'
+            echo '      <p class="subtitle">Reportes de automatización publicados en tiempo real desde GitHub Actions</p>'
+            echo '      <span class="status-badge">✓ En línea</span>'
+            echo '    </header>'
+            echo '    <div class="projects-grid">'
+
+            for proj_dir in */; do
+              proj_dir="${proj_dir%/}"
+              [ -f "$proj_dir/latest/index.html" ] || continue
+              BASE_URL="https://harp-andres.github.io/automation-test-reports-hub"
+              latest_url="$BASE_URL/$proj_dir/latest/"
+              meta_file="$proj_dir/latest/_meta.txt"
+              pub_date=""
+              src_repo=""
+              run_num=""
+              if [ -f "$meta_file" ]; then
+                pub_date=$(grep 'published_at_utc=' "$meta_file" | cut -d= -f2)
+                src_repo=$(grep 'source_repo=' "$meta_file" | cut -d= -f2)
+                run_num=$(grep 'run_number=' "$meta_file" | cut -d= -f2)
+              fi
+              # Obtener runs ordenados de mayor a menor (más reciente primero)
+              mapfile -t sorted_runs < <(find "$proj_dir/runs" -maxdepth 1 -mindepth 1 -type d 2>/dev/null \
+                | awk -F/ '{print $NF, $0}' | sort -rn | awk '{print $2}')
+              runs_count="${#sorted_runs[@]}"
+              echo "      <div class=\"project\">"
+              echo "        <div class=\"project-header\">"
+              echo "          <span class=\"project-icon\">📦</span>"
+              echo "          <h2>$proj_dir</h2>"
+              echo "        </div>"
+              echo "        <div class=\"project-meta\">"
+              [ -n "$src_repo" ] && echo "          <div class=\"meta-item\"><span>🔗 Repositorio:</span> <code>$src_repo</code></div>"
+              [ -n "$run_num" ]  && echo "          <div class=\"meta-item\"><span>🏃 Último run:</span> <strong>#$run_num</strong></div>"
+              [ -n "$pub_date" ] && echo "          <div class=\"meta-item\"><span>📅 Publicado:</span> <strong>$pub_date</strong></div>"
+              echo "          <div class=\"meta-item\"><span>📂 Histórico:</span> <strong>$runs_count run(s)</strong></div>"
+              echo "        </div>"
+              echo "        <div class=\"btn-group\">"
+              echo "          <a class=\"btn btn-primary\" href=\"$latest_url\">🌐 Ver reporte latest</a>"
+              if [ "$runs_count" -gt 0 ]; then
+                echo "          <details class=\"runs-history\">"
+                echo "            <summary>📋 Ver todos los históricos ($runs_count)</summary>"
+                echo "            <ul class=\"runs-list\">"
+                for run_dir in "${sorted_runs[@]}"; do
+                  rn=$(basename "$run_dir")
+                  run_url="$BASE_URL/$proj_dir/runs/$rn/"
+                  echo "              <li><a href=\"$run_url\" title=\"Abrir reporte run #$rn\">Run #$rn</a></li>"
+                done
+                echo "            </ul>"
+                echo "          </details>"
+              fi
+              echo "        </div>"
+              echo "      </div>"
+            done
+
+            echo "    </div>"
+            echo "    <footer>📤 Actualizado: $PUBLISHED_AT · Generado automáticamente por GitHub Actions</footer>"
+            echo "  </div>"
+            echo '</body>'
+            echo '</html>'
+          } > index.html
+
+          git add "$PROJECT_ID" index.html
+          if git diff --cached --quiet; then
+            echo "REPORTS_PUBLISHED=true" >> "$GITHUB_ENV"
+            echo "REPORTS_SKIP_REASON=" >> "$GITHUB_ENV"
+            echo "No hubo cambios de contenido para commitear."
+            exit 0
+          fi
+
+          git commit -m "report: $PROJECT_ID run ${{ github.run_number }}"
+          git push origin gh-pages
+
+          echo "REPORTS_PUBLISHED=true" >> "$GITHUB_ENV"
+          echo "REPORTS_SKIP_REASON=" >> "$GITHUB_ENV"
+          echo "✅ Reporte publicado en repo público: $REPORTS_REPO"
+
+      - name: Parse Results and Build Job Summary
+        run: |
+          RUN_ARTIFACTS_URL="${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}#artifacts"
+          PUBLIC_REPORT_URL="${PUBLIC_REPORT_URL:-}"
+          PUBLIC_REPORT_RUN_URL="${PUBLIC_REPORT_RUN_URL:-}"
+          REPORTS_PUBLISHED="${REPORTS_PUBLISHED:-false}"
+          REPORTS_SKIP_REASON="${REPORTS_SKIP_REASON:-}"
+          REPORT_PROJECT_ID="${REPORT_PROJECT_ID:-${{ github.event.repository.name }}}"
+          
+          echo "## 📊 Mobile Test Report - Self Hosted" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "| 🏷️ Detalle | 💾 Valor |" >> $GITHUB_STEP_SUMMARY
+          echo "|-----------|---------|" >> $GITHUB_STEP_SUMMARY
+          echo "| 🏃 Run | **#${{ github.run_number }}** |" >> $GITHUB_STEP_SUMMARY
+          echo "| 📅 Fecha | $(date '+%Y-%m-%d %H:%M UTC') |" >> $GITHUB_STEP_SUMMARY
+          echo "| 🌿 Rama | \`${{ github.ref_name }}\` |" >> $GITHUB_STEP_SUMMARY
+          echo "| 👤 Disparado por | @${{ github.actor }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| 💻 Runner | Self-Hosted Windows (local-android) |" >> $GITHUB_STEP_SUMMARY
+          echo "| 🧩 Proyecto | \`$REPORT_PROJECT_ID\` |" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+
+          # Parsear resultados de surefire XML si existen
+          SUREFIRE_DIR="downloaded-results/surefire-reports"
+          if ls "$SUREFIRE_DIR"/*.xml 1>/dev/null 2>&1; then
+            TOTAL=$(grep -h 'tests=' "$SUREFIRE_DIR"/*.xml 2>/dev/null | grep -oP 'tests="\K[0-9]+' | awk '{s+=$1}END{print s}')
+            FAILURES=$(grep -h 'failures=' "$SUREFIRE_DIR"/*.xml 2>/dev/null | grep -oP 'failures="\K[0-9]+' | awk '{s+=$1}END{print s}')
+            ERRORS=$(grep -h 'errors=' "$SUREFIRE_DIR"/*.xml 2>/dev/null | grep -oP 'errors="\K[0-9]+' | awk '{s+=$1}END{print s}')
+            SKIPPED=$(grep -h 'skipped=' "$SUREFIRE_DIR"/*.xml 2>/dev/null | grep -oP 'skipped="\K[0-9]+' | awk '{s+=$1}END{print s}')
+            TOTAL=${TOTAL:-0}; FAILURES=${FAILURES:-0}; ERRORS=${ERRORS:-0}; SKIPPED=${SKIPPED:-0}
+            PASSED=$((TOTAL - FAILURES - ERRORS - SKIPPED))
+            if [ "$FAILURES" -eq 0 ] && [ "$ERRORS" -eq 0 ]; then STATUS="✅ PASSED"; else STATUS="❌ FAILED"; fi
+
+            echo "### 🧪 Resultados de Tests" >> $GITHUB_STEP_SUMMARY
+            echo "" >> $GITHUB_STEP_SUMMARY
+            echo "| Estado | Total | ✅ Passed | ❌ Failed | ⚠️ Errors | ⏭️ Skipped |" >> $GITHUB_STEP_SUMMARY
+            echo "|--------|-------|-----------|-----------|-----------|------------|" >> $GITHUB_STEP_SUMMARY
+            echo "| $STATUS | **$TOTAL** | **$PASSED** | **$FAILURES** | **$ERRORS** | **$SKIPPED** |" >> $GITHUB_STEP_SUMMARY
+            echo "" >> $GITHUB_STEP_SUMMARY
+          fi
+
+          # Parsear cucumber JSON si existe
+          CUCUMBER_JSON="downloaded-results/cucumber-reports/cucumber.json"
+          if [ -f "$CUCUMBER_JSON" ]; then
+            SCENARIOS=$(python3 -c "import json,sys; d=json.load(open('$CUCUMBER_JSON')); print(sum(len(f.get('elements',[])) for f in d))" 2>/dev/null || echo "N/A")
+            PASSED_SC=$(python3 -c "import json,sys; d=json.load(open('$CUCUMBER_JSON')); print(sum(1 for f in d for e in f.get('elements',[]) if all(s.get('result',{}).get('status')=='passed' for s in e.get('steps',[]))))" 2>/dev/null || echo "N/A")
+            echo "### 🥒 Escenarios Cucumber" >> $GITHUB_STEP_SUMMARY
+            echo "" >> $GITHUB_STEP_SUMMARY
+            echo "| Total Escenarios | ✅ Passed |" >> $GITHUB_STEP_SUMMARY
+            echo "|------------------|-----------|" >> $GITHUB_STEP_SUMMARY
+            echo "| **$SCENARIOS** | **$PASSED_SC** |" >> $GITHUB_STEP_SUMMARY
+            echo "" >> $GITHUB_STEP_SUMMARY
+          fi
+
+          echo "### 📁 Artefactos Disponibles" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "- 📦 **allure-html-report-run-${{ github.run_number }}**: Reporte HTML completo de Allure." >> $GITHUB_STEP_SUMMARY
+          echo "- 📦 **mobile-test-results-local-android**: Resultados raw (allure-results, cucumber, surefire, screenshots, videos)." >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "[🔗 Abrir sección Artifacts de esta ejecución →](${RUN_ARTIFACTS_URL})" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+
+          if [ "$REPORTS_PUBLISHED" = "true" ] && [ -n "$PUBLIC_REPORT_URL" ]; then
+            echo "### 🌐 Reportes Online (Public Hub)" >> $GITHUB_STEP_SUMMARY
+            echo "" >> $GITHUB_STEP_SUMMARY
+            echo "**👉 [Ver reporte latest en línea](${PUBLIC_REPORT_URL})** ← Última ejecución" >> $GITHUB_STEP_SUMMARY
+            echo "" >> $GITHUB_STEP_SUMMARY
+            echo "[📚 Acceder al menú de todos los históricos →](https://harp-andres.github.io/automation-test-reports-hub/)" >> $GITHUB_STEP_SUMMARY
+            echo "" >> $GITHUB_STEP_SUMMARY
+            echo "> 💡 El reporte **latest** se reemplaza en cada ejecución. El histórico por **run** se mantiene permanente." >> $GITHUB_STEP_SUMMARY
+            echo "" >> $GITHUB_STEP_SUMMARY
+          else
+            echo "### ℹ️ Reportes Online" >> $GITHUB_STEP_SUMMARY
+            echo "" >> $GITHUB_STEP_SUMMARY
+            echo "> URL online no disponible en esta ejecución." >> $GITHUB_STEP_SUMMARY
+            if [ -n "$REPORTS_SKIP_REASON" ]; then
+              echo "> **Motivo:** $REPORTS_SKIP_REASON" >> $GITHUB_STEP_SUMMARY
+            fi
+            echo "" >> $GITHUB_STEP_SUMMARY
+          fi
+
+          if [ -n "${ALLURE_SKIP_REASON:-}" ]; then
+            echo "### ⚠️ Advertencias" >> $GITHUB_STEP_SUMMARY
+            echo "" >> $GITHUB_STEP_SUMMARY
+            echo "- ${ALLURE_SKIP_REASON}" >> $GITHUB_STEP_SUMMARY
+            echo "" >> $GITHUB_STEP_SUMMARY
+          fi
+          
+          echo "### 📖 Instrucciones" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "Para ver el reporte HTML completo en tu equipo:" >> $GITHUB_STEP_SUMMARY
+          echo "1. Descarga el artifact \`allure-html-report-run-${{ github.run_number }}\` desde Artifacts ↑" >> $GITHUB_STEP_SUMMARY
+          echo "2. Descomprime el archivo ZIP" >> $GITHUB_STEP_SUMMARY
+          echo "3. Abre \`index.html\` en tu navegador" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+

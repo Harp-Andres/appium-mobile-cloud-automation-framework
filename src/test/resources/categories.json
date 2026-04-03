@@ -1,0 +1,27 @@
+[
+  {
+    "name": "Assertion Error",
+    "matchedStatuses": ["failed"],
+    "messageRegex": ".*AssertionError.*",
+    "traceRegex": ".*AssertionError.*"
+  },
+  {
+    "name": "Element Not Found",
+    "matchedStatuses": ["failed"],
+    "messageRegex": ".*NoSuchElementException.*|.*element could not be located.*",
+    "traceRegex": ".*NoSuchElementException.*"
+  },
+  {
+    "name": "Timeout",
+    "matchedStatuses": ["failed"],
+    "messageRegex": ".*TimeoutException.*|.*timed out.*",
+    "traceRegex": ".*TimeoutException.*"
+  },
+  {
+    "name": "Mobile Error",
+    "matchedStatuses": ["failed"],
+    "messageRegex": ".*Appium.*|.*Mobile.*|.*Session.*",
+    "traceRegex": ".*Appium.*|.*Mobile.*|.*Session.*"
+  }
+]
+

@@ -1,0 +1,93 @@
+# Configuración GitLab CI/CD (Alternativa a GitHub Actions)
+
+image: maven:3.9-eclipse-temurin-17
+
+variables:
+  MAVEN_OPTS: "-Dmaven.repo.local=$CI_PROJECT_DIR/.m2/repository"
+  ALLURE_RESULTS_DIR: "target/allure-results"
+
+cache:
+  paths:
+    - .m2/repository/
+
+stages:
+  - build
+  - test
+  - report
+  - deploy
+
+build:
+  stage: build
+  script:
+    - mvn clean install -DskipTests -B
+  artifacts:
+    paths:
+      - target/
+    expire_in: 1 day
+  tags:
+    - docker
+
+test-framework:
+  stage: test
+  script:
+    - mvn test -Drun.mobile.tests=false -B
+  artifacts:
+    paths:
+      - target/allure-results/
+      - target/cucumber-reports/
+      - target/screenshots/
+    reports:
+      junit: target/surefire-reports/TEST-*.xml
+    expire_in: 30 days
+  allow_failure: false
+  tags:
+    - docker
+
+test-mobile:
+  stage: test
+  script:
+    - appium &
+    - sleep 10
+    - mvn test -Drun.mobile.tests=true -B
+  artifacts:
+    paths:
+      - target/allure-results/
+      - target/screenshots/
+      - target/videos/
+    expire_in: 30 days
+  allow_failure: true
+  only:
+    - schedules
+    - web
+  tags:
+    - android  # Tag para runner con emulador
+
+generate-allure:
+  stage: report
+  script:
+    - mvn allure:report -B || echo "Skipping Allure report"
+  artifacts:
+    paths:
+      - target/allure-report/
+    expire_in: 30 days
+  allow_failure: true
+  dependencies:
+    - test-framework
+    - test-mobile
+  tags:
+    - docker
+
+pages:
+  stage: deploy
+  script:
+    - mkdir -p public
+    - cp -r target/allure-report/* public/
+  artifacts:
+    paths:
+      - public
+    expire_in: 30 days
+  only:
+    - main
+  tags:
+    - docker
+
