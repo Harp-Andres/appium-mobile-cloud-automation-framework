@@ -15,14 +15,13 @@ public class HomePageUI {
 
     @AndroidFindBy(xpath = "//android.widget.TextView[@text='API Demos']")
     @iOSXCUITFindBy(accessibility = "API Demos")
-    public static WebElement HOME_TITLE;
+    public WebElement HOME_TITLE;
 
-    @AndroidFindBy(id = "android:id/action_bar_title")
+    @AndroidFindBy(accessibility = "Content")
     @iOSXCUITFindBy(xpath = "//XCUIElementTypeNavigationBar//XCUIElementTypeStaticText[1]")
-    public static WebElement PRINCIPLA_MENU;
+    public WebElement PRINCIPAL_MENU;
 
     public HomePageUI(AppiumDriver driver) {
         PageFactory.initElements(new AppiumFieldDecorator(driver), this);
     }
 }
-

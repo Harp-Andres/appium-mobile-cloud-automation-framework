@@ -13,16 +13,15 @@ import org.openqa.selenium.support.PageFactory;
  */
 public class ContentUI {
 
-
     @AndroidFindBy(xpath = "//android.widget.TextView[@content-desc='Assets']")
     @iOSXCUITFindBy(xpath = "//*[contains(@name,'Read Asset') or contains(@label,'Read Asset') or contains(@value,'Read Asset')]")
-    public static WebElement LABEL_ASSETS;
+    public WebElement LABEL_ASSETS;
 
     @AndroidFindBy(accessibility = "Read Asset")
     @iOSXCUITFindBy(xpath = "//*[contains(@name,'raw Asset') or contains(@label,'raw Asset') or contains(@value,'raw Asset')]")
-    public static WebElement LABEL_READ_ASSET;
+    public WebElement LABEL_READ_ASSET;
 
-    @AndroidFindBy(uiAutomator = "new UiSelector().text('Content/Assets/Read Asset')")
+    @AndroidFindBy(xpath = "//android.widget.TextView[@text='Content/Assets/Read Asset']")
     @iOSXCUITFindBy(xpath = "//XCUIElementTypeNavigationBar//XCUIElementTypeStaticText[1]")
     public WebElement PATCH_TITLE;
 
@@ -34,4 +33,3 @@ public class ContentUI {
         PageFactory.initElements(new AppiumFieldDecorator(driver), this);
     }
 }
-

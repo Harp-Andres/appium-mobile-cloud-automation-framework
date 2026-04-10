@@ -12,8 +12,8 @@ import com.automatizacion.moderna.ui.ContentUI;
  * <pre>
  * Ensure.that(actor())
  *     .asksFor(TituloPantalla.ahora())
- *     .as("El título debe ser '%s'", expected)
- *     .isIn(expected, expectedLeaf);
+ *     .as("El título de pantalla debe ser '%s'", expected)
+ *     .isEqualTo(expected);
  * </pre>
  */
 public final class TituloPantalla implements Question<String> {

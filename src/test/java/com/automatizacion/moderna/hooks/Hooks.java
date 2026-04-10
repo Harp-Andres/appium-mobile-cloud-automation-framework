@@ -8,6 +8,7 @@ import com.automatizacion.moderna.abilities.WaitForElements;
 import com.automatizacion.moderna.config.FrameworkConfig;
 import com.automatizacion.moderna.driver.AppiumServerManager;
 import com.automatizacion.moderna.driver.DriverFactory;
+import com.automatizacion.moderna.utils.AllureEnvironmentWriter;
 import io.appium.java_client.AppiumDriver;
 import io.cucumber.java.After;
 import io.cucumber.java.Before;
@@ -41,6 +42,9 @@ public class Hooks {
 
         String platform = detectPlatform(scenario.getSourceTagNames());
         String env = FrameworkConfig.getInstance().getActiveEnv();
+
+        // Escribe environment.properties + copia categories.json al results-dir (una vez por JVM).
+        AllureEnvironmentWriter.writeOnce(platform);
 
         logInfo("beforeScenario platform=" + platform + " env=" + env
             + " scenario=" + scenario.getName() + " thread=" + Thread.currentThread().getName());

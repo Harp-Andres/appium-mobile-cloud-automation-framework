@@ -84,7 +84,8 @@ public class EvidenceHooks {
     public void afterMobileScenario(Scenario scenario) {
         TakeScreenshot takeScreenshot = currentTakeScreenshotAbility();
         AppiumDriver driver = currentDriver();
-        boolean screenshotOnPass = Boolean.parseBoolean(System.getProperty("evidence.screenshot.on.pass", "true"));
+        boolean screenshotOnPass = com.automatizacion.moderna.utils.EvidenceConfig
+            .getBoolean("evidence.screenshot.on.pass", true);
         boolean takeFinalScreenshot = scenario.isFailed() || screenshotOnPass;
         if (takeFinalScreenshot && takeScreenshot != null) {
             String label = scenario.isFailed() ? "FAILED_FINAL_SCREEN" : "PASSED_FINAL_SCREEN";

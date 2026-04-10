@@ -12,4 +12,4 @@ Feature: ApiDemos Navegación y verificación de Asset
     Given the user is on the application home page
     When the user navigates to Content/Assets/Read Asset
     Then the screen title should be "Content/Assets/Read Asset"
-    And the subtitle should be "This text is stored in a raw Asset."
+    And the subtitle should be "This text is stored in a raw Asset. It was read and placed into the TextView here."
