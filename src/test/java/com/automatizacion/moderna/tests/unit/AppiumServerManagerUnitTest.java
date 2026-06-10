@@ -95,9 +95,13 @@ class AppiumServerManagerUnitTest {
         try {
             Process p = new ProcessBuilder("appium", "--version").start();
             boolean exited = p.waitFor(3, TimeUnit.SECONDS);
+            int exitCode = exited ? p.exitValue() : -1;
             p.destroyForcibly();
-            return exited;
-        } catch (IOException | InterruptedException e) {
+            return exited && exitCode == 0;
+        } catch (IOException e) {
+            return false;
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
             return false;
         }
     }
