@@ -9,6 +9,7 @@ import org.junit.jupiter.api.Test;
 
 import java.io.IOException;
 import java.net.ServerSocket;
+import java.util.concurrent.TimeUnit;
 
 class AppiumServerManagerUnitTest {
 
@@ -26,6 +27,8 @@ class AppiumServerManagerUnitTest {
         String executionEnv = resolveExecutionEnv();
         Assumptions.assumeTrue("local".equalsIgnoreCase(executionEnv),
             "Test de infraestructura local omitido porque ENV no es local. ENV actual: " + executionEnv);
+        Assumptions.assumeTrue(isAppiumBinaryAvailable(),
+            "Test de infraestructura omitido: el binario 'appium' no está disponible en PATH — instala con 'npm install -g appium'");
 
         int port = findFreePort();
         String serverUrl = "http://127.0.0.1:" + port;
@@ -85,6 +88,21 @@ class AppiumServerManagerUnitTest {
         } catch (InterruptedException e) {
             Thread.currentThread().interrupt();
             throw new IllegalStateException("La espera del test fue interrumpida", e);
+        }
+    }
+
+    private boolean isAppiumBinaryAvailable() {
+        try {
+            Process p = new ProcessBuilder("appium", "--version").start();
+            boolean exited = p.waitFor(3, TimeUnit.SECONDS);
+            int exitCode = exited ? p.exitValue() : -1;
+            p.destroyForcibly();
+            return exited && exitCode == 0;
+        } catch (IOException e) {
+            return false;
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            return false;
         }
     }
 
