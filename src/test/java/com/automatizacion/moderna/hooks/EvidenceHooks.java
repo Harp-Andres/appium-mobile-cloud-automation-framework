@@ -10,6 +10,8 @@ import io.cucumber.java.After;
 import io.cucumber.java.AfterStep;
 import io.cucumber.java.Before;
 import io.cucumber.java.Scenario;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 /**
  * Hooks profesionales para la gestión de evidencias en Cucumber con Screenplay.
@@ -18,6 +20,8 @@ import io.cucumber.java.Scenario;
  * - Cumple con SOLID y POO, sin lógica legacy ni redundante.
  */
 public class EvidenceHooks {
+
+    private static final Logger log = LoggerFactory.getLogger(EvidenceHooks.class);
 
     /**
      * Obtiene el actor actual de forma robusta.
@@ -50,16 +54,16 @@ public class EvidenceHooks {
      */
     @Before(order = 10, value = "@mobile")
     public void beforeMobileScenario(Scenario scenario) {
-        System.out.println("[EVIDENCE] Iniciando escenario: " + scenario.getName());
+        log.info("Iniciando escenario: {}", scenario.getName());
         boolean videoEnabled = com.automatizacion.moderna.utils.EvidenceConfig.getBoolean("evidence.video.enabled", false);
         if (!videoEnabled) return;
         AppiumDriver driver = currentDriver();
         if (driver instanceof CanRecordScreen recorder) {
             try {
                 recorder.startRecordingScreen();
-                System.out.println("[EVIDENCE] Grabación de video iniciada");
+                log.info("Grabación de video iniciada");
             } catch (Exception e) {
-                System.out.println("[EVIDENCE] No se pudo iniciar grabación: " + e.getMessage());
+                log.warn("No se pudo iniciar grabación: {}", e.getMessage());
             }
         }
     }
@@ -92,9 +96,9 @@ public class EvidenceHooks {
             EvidenceCapture.attachScreenshot(takeScreenshot, label + "_" + scenario.getName(), scenario.isFailed(), scenario);
         }
         if (scenario.isFailed()) {
-            System.out.println("[EVIDENCE] Escenario fallido: " + scenario.getName());
+            log.warn("Escenario fallido: {}", scenario.getName());
         } else {
-            System.out.println("[EVIDENCE] Escenario exitoso: " + scenario.getName());
+            log.info("Escenario exitoso: {}", scenario.getName());
         }
         boolean videoEnabled = com.automatizacion.moderna.utils.EvidenceConfig.getBoolean("evidence.video.enabled", false);
         if (videoEnabled && driver instanceof CanRecordScreen recorder) {
@@ -103,7 +107,7 @@ public class EvidenceHooks {
                 String videoName = (scenario.isFailed() ? "FAILED_VIDEO_" : "PASSED_VIDEO_") + scenario.getName();
                 EvidenceCapture.attachVideoFromBase64(base64Video, videoName, scenario.isFailed());
             } catch (Exception e) {
-                System.out.println("[EVIDENCE] No se pudo detener/adjuntar video: " + e.getMessage());
+                log.warn("No se pudo detener/adjuntar video: {}", e.getMessage());
             }
         }
         if (driver != null) {

@@ -20,6 +20,8 @@ ext {
     junitPlatformVersion = '1.11.4'
     allureVersion = '2.29.1'
     assertjVersion = '3.27.3'
+    slf4jVersion = '2.0.16'
+    logbackVersion = '1.5.12'
 }
 
 repositories {
@@ -49,6 +51,9 @@ dependencies {
     // Allure
     testImplementation "io.qameta.allure:allure-cucumber7-jvm:${allureVersion}"
     testImplementation "io.qameta.allure:allure-attachments:${allureVersion}"
+
+    testImplementation "org.slf4j:slf4j-api:${slf4jVersion}"
+    testImplementation "ch.qos.logback:logback-classic:${logbackVersion}"
 }
 
 test {
@@ -57,18 +62,18 @@ test {
         events "passed", "skipped", "failed"
     }
 
-    def selectedEnv = (System.getProperty("ENV") ?: System.getenv("ENV") ?: "").trim()
-
-    if (!selectedEnv) {
-        throw new RuntimeException("Debe definir ENV para ejecutar las pruebas. Ejemplo local: .\\gradlew.bat test -DENV=local")
-    }
-
-    systemProperty "ENV", selectedEnv
     // La suite Cucumber se ejecuta en el task test; unitarias van en unitTest.
     exclude '**/tests/unit/**'
 
     doFirst {
-        println "[INFO] Entorno activo para tests: ${selectedEnv}"
+        def selectedEnv = (System.getProperty("ENV") ?: System.getenv("ENV") ?: "").trim()
+        if (!selectedEnv) {
+            throw new RuntimeException(
+                "Debe definir ENV para ejecutar las pruebas Cucumber. Ejemplo: ./gradlew test -DENV=browserstack"
+            )
+        }
+        systemProperty "ENV", selectedEnv
+        logger.lifecycle("[INFO] Entorno activo para tests: ${selectedEnv}")
     }
 }
 
@@ -92,9 +97,14 @@ tasks.register('unitTest', Test) {
     }
 
     doFirst {
-        println "[INFO] Entorno activo para unitTest: ${selectedEnv ?: 'no-definido'}"
+        def env = (System.getProperty("ENV") ?: System.getenv("ENV") ?: "").trim()
+        logger.lifecycle("[INFO] Entorno activo para unitTest: ${env ?: 'no-definido'}")
     }
 }
 
 test.dependsOn(tasks.named('unitTest'))
+
+tasks.named('check') {
+    dependsOn tasks.named('unitTest')
+}
 

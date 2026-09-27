@@ -46,14 +46,10 @@ jobs:
           cache: gradle
 
       # --- MIGRADO A GRADLE ---
-      - name: 🧪 Run Sanity Tests - Unit Tests + Cucumber Health (sin dispositivo)
+      - name: Run unit tests (no Appium / no ENV required)
         run: |
-          # Función para ejecutar tests con Gradle y loguear salida
-          run_gradle_test() {
-            ./gradlew test --info -Drun.mobile.tests=false
-          }
           mkdir -p build/ci-logs
-          run_gradle_test 2>&1 | tee build/ci-logs/sanity-gradle.log
+          ./gradlew unitTest --info 2>&1 | tee build/ci-logs/sanity-gradle.log
 
       - name: Upload Sanity Test Results
         if: always()

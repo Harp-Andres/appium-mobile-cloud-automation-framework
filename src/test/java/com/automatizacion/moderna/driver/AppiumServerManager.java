@@ -10,6 +10,8 @@ import java.net.http.HttpResponse;
 import java.time.Duration;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 /**
  * Gestiona el ciclo de vida del servidor Appium local.
@@ -22,6 +24,7 @@ import java.util.concurrent.atomic.AtomicBoolean;
  */
 public final class AppiumServerManager {
 
+    private static final Logger log = LoggerFactory.getLogger(AppiumServerManager.class);
     private static final int STARTUP_WAIT_SECONDS = 30;
     private static final int STATUS_CHECK_INTERVAL_MS = 1000;
 
@@ -186,7 +189,7 @@ public final class AppiumServerManager {
     }
 
     private static void logInfo(String msg) {
-        System.out.println("[APPIUM-SERVER][INFO] " + msg);
+        log.info(msg);
     }
 }
 

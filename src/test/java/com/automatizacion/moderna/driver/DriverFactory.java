@@ -17,6 +17,8 @@ import java.nio.file.Path;
 import java.time.Duration;
 import java.util.LinkedHashMap;
 import java.util.Map;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 /**
  * Responsabilidad unica: crear un {@link AppiumDriver} para la plataforma indicada.
@@ -27,6 +29,7 @@ import java.util.Map;
  */
 public final class DriverFactory {
 
+    private static final Logger log = LoggerFactory.getLogger(DriverFactory.class);
     private static final int SESSION_RETRY_COUNT = 2;
     private static final long SESSION_RETRY_DELAY_MS = 1200;
 
@@ -274,10 +277,10 @@ public final class DriverFactory {
     }
 
     private static void logInfo(String msg) {
-        System.out.println("[DRIVER][INFO] " + msg);
+        log.info(msg);
     }
 
     private static void logError(String msg) {
-        System.out.println("[DRIVER][ERROR] " + msg);
+        log.error(msg);
     }
 }

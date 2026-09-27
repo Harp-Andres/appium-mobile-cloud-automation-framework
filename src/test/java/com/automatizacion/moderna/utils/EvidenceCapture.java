@@ -10,6 +10,8 @@ import java.io.FileOutputStream;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.Base64;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 /**
  * Utilidades profesionales para capturar evidencias (screenshots, logs, video) en Appium bajo Screenplay.
@@ -17,6 +19,7 @@ import java.util.Base64;
  */
 public class EvidenceCapture {
 
+    private static final Logger log = LoggerFactory.getLogger(EvidenceCapture.class);
     private static final String SCREENSHOTS_DIR = "target/screenshots";
     private static final String VIDEOS_DIR = "target/videos";
     private static final DateTimeFormatter FORMATTER = DateTimeFormatter.ofPattern("yyyy-MM-dd_HH-mm-ss-SSS");
@@ -24,11 +27,11 @@ public class EvidenceCapture {
     static {
         File screenshotsDir = new File(SCREENSHOTS_DIR);
         if (!screenshotsDir.exists() && !screenshotsDir.mkdirs()) {
-            System.out.println("[EVIDENCE][WARN] No se pudo crear el directorio de screenshots: " + SCREENSHOTS_DIR);
+            log.warn("No se pudo crear el directorio de screenshots: {}", SCREENSHOTS_DIR);
         }
         File videosDir = new File(VIDEOS_DIR);
         if (!videosDir.exists() && !videosDir.mkdirs()) {
-            System.out.println("[EVIDENCE][WARN] No se pudo crear el directorio de videos: " + VIDEOS_DIR);
+            log.warn("No se pudo crear el directorio de videos: {}", VIDEOS_DIR);
         }
     }
 
@@ -42,7 +45,7 @@ public class EvidenceCapture {
      */
     public static void attachScreenshot(TakeScreenshot takeScreenshot, String attachmentName, boolean saveToDisk, Scenario scenario) {
         if (takeScreenshot == null) {
-            System.out.println("[EVIDENCE] No se puede capturar screenshot: habilidad TakeScreenshot es null");
+            log.warn("No se puede capturar screenshot: habilidad TakeScreenshot es null");
             return;
         }
         try {
@@ -55,7 +58,7 @@ public class EvidenceCapture {
                 try (FileOutputStream fos = new FileOutputStream(filepath)) {
                     fos.write(screenshot);
                 }
-                System.out.println("[EVIDENCE] Screenshot guardado: " + filepath);
+                log.info("Screenshot guardado: {}", filepath);
             }
 
             Allure.getLifecycle().addAttachment(
@@ -64,14 +67,14 @@ public class EvidenceCapture {
                 "png",
                 screenshot
             );
-            System.out.println("[EVIDENCE] Screenshot adjuntado a Allure: " + attachmentName);
+            log.debug("Screenshot adjuntado a Allure: {}", attachmentName);
 
             if (scenario != null) {
                 scenario.attach(screenshot, "image/png", attachmentName);
-                System.out.println("[EVIDENCE] Screenshot adjuntado a Cucumber: " + attachmentName);
+                log.debug("Screenshot adjuntado a Cucumber: {}", attachmentName);
             }
         } catch (Exception e) {
-            System.out.println("[EVIDENCE] Error al capturar screenshot: " + e.getMessage());
+            log.warn("Error al capturar screenshot: {}", e.getMessage());
         }
     }
 
@@ -83,7 +86,7 @@ public class EvidenceCapture {
      */
     public static void attachVideoFromBase64(String base64Video, String attachmentName, boolean saveToDisk) {
         if (base64Video == null || base64Video.isBlank()) {
-            System.out.println("[EVIDENCE] Video vacio, no se adjunta");
+            log.debug("Video vacio, no se adjunta");
             return;
         }
         try {
@@ -96,7 +99,7 @@ public class EvidenceCapture {
                 try (FileOutputStream fos = new FileOutputStream(filepath)) {
                     fos.write(videoBytes);
                 }
-                System.out.println("[EVIDENCE] Video guardado: " + filepath);
+                log.info("Video guardado: {}", filepath);
             }
 
             Allure.getLifecycle().addAttachment(
@@ -105,9 +108,9 @@ public class EvidenceCapture {
                 "mp4",
                 videoBytes
             );
-            System.out.println("[EVIDENCE] Video adjuntado a Allure: " + attachmentName);
+            log.debug("Video adjuntado a Allure: {}", attachmentName);
         } catch (Exception e) {
-            System.out.println("[EVIDENCE] Error al adjuntar video: " + e.getMessage());
+            log.warn("Error al adjuntar video: {}", e.getMessage());
         }
     }
 
@@ -119,9 +122,9 @@ public class EvidenceCapture {
     public static void attachLog(String title, String content) {
         try {
             Allure.addAttachment(title, "text/plain", content, "txt");
-            System.out.println("[EVIDENCE] Log adjuntado: " + title);
+            log.debug("Log adjuntado: {}", title);
         } catch (Exception e) {
-            System.out.println("[EVIDENCE] Error al adjuntar log: " + e.getMessage());
+            log.warn("Error al adjuntar log: {}", e.getMessage());
         }
     }
 
@@ -137,7 +140,7 @@ public class EvidenceCapture {
                 + "App: " + driver.getCapabilities().getCapability("app");
             attachLog("Driver Info", driverInfo);
         } catch (Exception e) {
-            System.out.println("[EVIDENCE] Error al adjuntar driver info: " + e.getMessage());
+            log.warn("Error al adjuntar driver info: {}", e.getMessage());
         }
     }
 

@@ -14,6 +14,8 @@ import io.cucumber.java.After;
 import io.cucumber.java.Before;
 import io.cucumber.java.Scenario;
 import io.qameta.allure.Allure;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.util.Collection;
 
@@ -27,6 +29,7 @@ import java.util.Collection;
  */
 public class Hooks {
 
+    private static final Logger log = LoggerFactory.getLogger(Hooks.class);
     private static final ThreadLocal<Actor> ACTOR = new ThreadLocal<>();
 
     public static Actor currentActor() {
@@ -119,14 +122,14 @@ public class Hooks {
     }
 
     private static void logInfo(String msg) {
-        System.out.println("[HOOKS][INFO] " + msg);
+        log.info(msg);
     }
 
     private static void logWarn(String msg) {
-        System.out.println("[HOOKS][WARN] " + msg);
+        log.warn(msg);
     }
 
     private static void logError(String msg) {
-        System.out.println("[HOOKS][ERROR] " + msg);
+        log.error(msg);
     }
 }
