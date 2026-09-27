@@ -70,3 +70,8 @@ Thumbs.db
 
 # Otros
 *.orig
+
+# Downloaded demo apps
+/apps/
+*.ipa
+TheApp.app.zip

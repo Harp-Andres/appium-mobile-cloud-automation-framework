@@ -1,0 +1,37 @@
+name: AWS Device Farm (manual)
+
+# Specialty of this cloud repo: multi-farm. This workflow documents the entry point.
+# Full Device Farm packaging varies by custom test environment; keep manual until
+# AWS credentials + project ARN secrets are configured.
+
+on:
+  workflow_dispatch:
+    inputs:
+      platform:
+        description: Platform package to upload
+        required: true
+        default: android
+        type: choice
+        options:
+          - android
+          - ios
+
+permissions:
+  contents: read
+
+jobs:
+  prepare-apps:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Download free demo apps
+        run: |
+          chmod +x scripts/download-test-apps.sh
+          ./scripts/download-test-apps.sh
+      - name: Show artifacts
+        run: ls -lh apps/
+      - name: Device Farm reminder
+        run: |
+          echo "Configure secrets: AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY, AWS_DEVICE_FARM_PROJECT_ARN"
+          echo "Then: aws devicefarm create-upload / schedule-run using apps/TheApp.apk or apps/SauceLabs-Sample.ipa"
+          echo "See docs/TEST_APP_AND_FARMS.md and src/test/resources/config/aws.properties"
