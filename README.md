@@ -4,7 +4,7 @@ Demo framework for running the **same Appium + Cucumber suite** on multiple devi
 
 | Sibling repo | Focus |
 | --- | --- |
-| [`appium-mobile-automation-framework`](https://github.com/Harp-Andres/appium-mobile-automation-framework) | Mature **self-hosted/local** ExpandTesting (do not change its default AUT) |
+| [`appium-mobile-automation-framework`](https://github.com/Harp-Andres/appium-mobile-automation-framework) | Mature **self-hosted/local** Appium runner + TheApp (keep runner intact) |
 | [`demo-serenity-screenplay-mobile`](https://github.com/Harp-Andres/demo-serenity-screenplay-mobile) | Serenity Screenplay + TheApp |
 | **This repo** | Same suite on **BrowserStack + AWS** (+ local fallback with TheApp) |
 

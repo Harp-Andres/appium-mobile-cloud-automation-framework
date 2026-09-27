@@ -26,6 +26,6 @@ This repo’s specialty is **running the same Appium suite on different farms** 
 
 | Repo | Role |
 | --- | --- |
-| [`appium-mobile-automation-framework`](https://github.com/Harp-Andres/appium-mobile-automation-framework) | Mature self-hosted ExpandTesting (leave default AUT alone) |
+| [`appium-mobile-automation-framework`](https://github.com/Harp-Andres/appium-mobile-automation-framework) | Mature self-hosted Appium runner + TheApp |
 | [`demo-serenity-screenplay-mobile`](https://github.com/Harp-Andres/demo-serenity-screenplay-mobile) | Serenity Screenplay + TheApp |
 | **This repo** | Multi-farm (BrowserStack / AWS) with TheApp Android + Sauce iOS IPA |
