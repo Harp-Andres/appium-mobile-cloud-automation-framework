@@ -67,6 +67,22 @@ class FrameworkConfigUnitTest {
             FrameworkConfig.reset();
         }
     }
+
+    @Test
+    void shouldDefaultToTheAppAndroidPackage() {
+        System.setProperty("ENV", "local");
+        FrameworkConfig.reset();
+
+        try {
+            FrameworkConfig config = FrameworkConfig.getInstance();
+
+            Assertions.assertEquals("com.appiumpro.the_app", config.getForPlatform("android", "app.package"));
+            Assertions.assertEquals(".MainActivity", config.getForPlatform("android", "app.activity"));
+            Assertions.assertEquals("apps/TheApp.apk", config.getForPlatform("android", "app.path"));
+        } finally {
+            FrameworkConfig.reset();
+        }
+    }
 }
 
 

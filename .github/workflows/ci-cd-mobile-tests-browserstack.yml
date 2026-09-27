@@ -231,7 +231,7 @@ jobs:
             -Drun.mobile.tests=true \
             -Dplatform.target=${{ matrix.platform }} \
             -Dcucumber.filter.tags="@mobile and @${{ matrix.platform }}" \
-            --tests "com.automatizacion.moderna.runner.RunApiDemoTest" \
+            --tests "com.automatizacion.moderna.runner.RunMobileTestSuite" \
             --info 2>&1 | tee build/ci-logs/browserstack-gradle-${{ matrix.platform }}.log
 
       - name: Print Gradle log tail on failure

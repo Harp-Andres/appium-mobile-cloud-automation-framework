@@ -1,47 +1,57 @@
-# Appium Mobile Cloud Automation Framework (BrowserStack)
+# Appium Mobile Cloud Automation Framework
 
-Demo framework for **cloud device farm** automation with **BrowserStack App Automate**, Screenplay-style structure, Cucumber, JUnit 5, and Allure. Local emulator/device flows are maintained only as an optional fallback; the primary path is `ENV=browserstack`.
+Demo framework for running the **same Appium + Cucumber suite** on multiple device farms: **BrowserStack**, **AWS Device Farm**, and **local Appium** as an optional fallback. Specialty = `ENV` profiles (`local` / `browserstack` / `aws`), `DriverFactory` farm capabilities, and `scripts/download-test-apps.sh` for shared AUT binaries.
 
-For **local-only** Appium (emulator/USB), use [`appium-mobile-automation-framework`](https://github.com/Harp-Andres/appium-mobile-automation-framework).
+| Sibling repo | Focus |
+| --- | --- |
+| [`appium-mobile-automation-framework`](https://github.com/Harp-Andres/appium-mobile-automation-framework) | Local emulator/USB Appium only |
+| [`demo-serenity-screenplay-mobile`](https://github.com/Harp-Andres/demo-serenity-screenplay-mobile) | Serenity Screenplay + Docker Appium hub |
 
 [![Java](https://img.shields.io/badge/Java-17-orange.svg)](https://www.oracle.com/java/)
 [![Appium](https://img.shields.io/badge/Appium-9.2.3-blue.svg)](https://appium.io/)
 [![Gradle](https://img.shields.io/badge/Gradle-9.x-green.svg)](https://gradle.org/)
 
-## Scope
+## App under test (AUT)
 
-| Primary | Optional fallback |
-|---------|-------------------|
-| `ENV=browserstack` + Hub URL with credentials via env/secrets | `ENV=local` + local Appium (`appium.auto.start`) |
-| Parallel Android/iOS via platform-prefixed properties | Same codebase, different property files |
-| BrowserStack CI workflow | Local Gradle `test` with `-DENV=local` |
+| Platform | Artifact | Package / bundle |
+| --- | --- | --- |
+| Android | `apps/TheApp.apk` (download script) | `com.appiumpro.the_app` |
+| iOS (real device farms) | `apps/SauceLabs-Sample.ipa` | `com.saucelabs.mydemoapp.ios` |
 
-Never commit real BrowserStack keys. Use `BROWSERSTACK_USERNAME` / `BROWSERSTACK_ACCESS_KEY` (or placeholders in `browserstack.properties` resolved at runtime).
+```bash
+./scripts/download-test-apps.sh
+```
+
+Do **not** commit APK/IPA files. Upload to farms and set `BROWSERSTACK_*` or Device Farm upload ARNs as documented in `docs/TEST_APP_AND_FARMS.md`.
+
+## Scenarios (farm smoke)
+
+1. **`framework_health.feature`** — create session, app launches in foreground.
+2. **`theapp_smoke.feature`** — TheApp home → Login Screen → optional `alice` / `mypassword` login.
 
 ## Stack
 
 - **Java 17**, **Gradle**, **Appium Java Client 9.2.x**
-- **Screenplay-inspired** packages (`actors`, `abilities`, `tasks`, `questions`)
+- Lightweight Screenplay-style packages (`actors`, `abilities`, `tasks`, `questions`)
 - **Cucumber 7** + **JUnit Platform**
 - **Allure** with dynamic `environment.properties` via `AllureEnvironmentWriter`
-- **SLF4J + Logback** for framework logging
 
 ## Configuration
 
 ```text
 src/test/resources/config/
-  base.properties
-  local.properties
+  base.properties      # shared defaults (TheApp Android package/activity)
+  local.properties     # apps/TheApp.apk + local Appium
   browserstack.properties
+  aws.properties
 ```
-
-Set `ENV` to select the overlay file:
 
 ```bash
-export ENV=browserstack
-# or
+export ENV=browserstack   # or aws | local
 ./gradlew test -DENV=browserstack
 ```
+
+Never commit real farm credentials. BrowserStack: `BROWSERSTACK_USERNAME` / `BROWSERSTACK_ACCESS_KEY`. AWS: `AWS_DEVICE_FARM_APPIUM_URL` when running inside a custom test environment.
 
 ## Run tests
 
@@ -49,29 +59,19 @@ export ENV=browserstack
 
 ```bash
 ./gradlew unitTest
-# or with env for config-related tests:
-./gradlew unitTest -DENV=local
 ```
 
-**Full Cucumber suite** (requires Appium endpoint — BrowserStack or local):
+**Cucumber** (requires Appium endpoint):
 
 ```bash
-./gradlew test -DENV=browserstack
+./gradlew test -DENV=browserstack --tests "com.automatizacion.moderna.runner.RunMobileTestSuite"
+# or health-only / TheApp-only runners under com.automatizacion.moderna.runner
 ```
 
 `check` depends on `unitTest` so CI can verify pure logic without a device.
 
 ## CI
 
-- `.github/workflows/ci-cd-mobile-tests-browserstack.yml` — cloud runs with secrets
+- `.github/workflows/ci-cd-mobile-tests-browserstack.yml`
+- `.github/workflows/ci-cd-mobile-tests-aws-device-farm.yml`
 - `.github/workflows/ci-cd-mobile-tests.yml` — optional local/self-hosted path
-
-## Packages
-
-```text
-com.automatizacion.moderna/
-  config/       FrameworkConfig (ENV + platform-aware keys)
-  driver/       DriverFactory, AppiumServerManager (local only)
-  hooks/        Lifecycle + Allure environment
-  tests/unit/   JUnit 5 pure logic tests
-```

@@ -71,7 +71,8 @@ Thumbs.db
 # Otros
 *.orig
 
-# Downloaded demo apps
+# Downloaded demo apps (never commit binaries)
 /apps/
+*.apk
 *.ipa
 TheApp.app.zip
